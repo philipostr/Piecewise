@@ -1,5 +1,7 @@
 {
     "rust-analyzer.linkedProjects": [
-        "C:\\Users\\phili\\Desktop\\Play_Hard\\Personal_Projects\\Piecewise\\piecewise\\src-tauri\\Cargo.toml"
-    ]
+        "C:\\Users\\phili\\Desktop\\Play_Hard\\Personal_Projects\\Piecewise\\piecewise\\src-tauri\\Cargo.toml",
+        "C:\\Users\\phili\\Desktop\\Play_Hard\\Personal_Projects\\Piecewise\\wisdom\\Cargo.toml"
+    ],
+    "java.dependency.syncWithFolderExplorer": false
 }

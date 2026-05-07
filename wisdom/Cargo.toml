@@ -1,0 +1,15 @@
+[package]
+name = "wisdom"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+dircpy = "0.3.20"
+dyn-fmt = "0.4.3"
+indent = "0.1.1"
+indoc = "2.0.7"
+itertools = "0.14.0"
+regex-lite = "0.1.9"
+serde = "1.0.228"
+serde-inline-default = "1.0.1"
+serde-saphyr = "0.0.24"
