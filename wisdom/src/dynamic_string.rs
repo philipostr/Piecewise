@@ -332,6 +332,11 @@ impl DynamicCallbackString {
     }
 }
 
+pub enum SetData {
+    Variable(String),
+    Function(String),
+}
+
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(try_from = "String", into = "String")]
 pub struct DynamicBindString {
@@ -368,7 +373,7 @@ impl DynamicBindString {
         &self.source
     }
 
-    pub fn compile(&self, data_var: &str) -> Result<HashMap<String, String>, GameReadError> {
+    pub fn compile(&self, data_var: SetData) -> Result<HashMap<String, String>, GameReadError> {
         /// Regex composition:
         /// - **`\$<`** - State subscription rune `$<`
         /// - **CAPTURE** - Get the state name
@@ -377,7 +382,7 @@ impl DynamicBindString {
             Regex::new(r#"\$<([a-zA-Z_][a-zA-Z0-9_]*)"#).unwrap()
         );
 
-        fn finish_sectioned_line(data_var: &str, sub_state: &str, half_compiled: &HalfCompiledDynamicString, is_simple_binding: bool) -> String {
+        fn finish_sectioned_line(data_var: &SetData, sub_state: &str, half_compiled: &HalfCompiledDynamicString, is_simple_binding: bool) -> String {
             let mut compiled_lines = Vec::new();
 
             for (mutated_state, sections) in half_compiled.line_sections.clone() {
@@ -411,13 +416,23 @@ impl DynamicBindString {
     
             let compiled_result = indent_by(4, compiled_lines.join("\n"));
             if is_simple_binding {
-                format!("{data_var} = {compiled_result};")
+                match data_var {
+                    SetData::Variable(v) => format!("{v} = {compiled_result};"),
+                    SetData::Function(f) => format!("{f}({compiled_result});"),
+                }
             } else {
-                indoc::formatdoc! {r#"
-                    {data_var} = (() => {{
-                        {compiled_result}
-                    }})();
-                "#}.trim_end().to_string()
+                match data_var {
+                    SetData::Variable(v) => indoc::formatdoc! {r#"
+                        {v} = (() => {{
+                            {compiled_result}
+                        }})();
+                    "#}.trim_end().to_string(),
+                    SetData::Function(f) => indoc::formatdoc! {r#"
+                        {f}((() => {{
+                            {compiled_result}
+                        }})());
+                    "#}.trim_end().to_string(),
+                }
             }
         }
 
@@ -435,7 +450,7 @@ impl DynamicBindString {
 
         for sub in &half_compiled.referenced_subs {
             compiled_bindings.insert(sub.clone(), finish_sectioned_line(
-                data_var,
+                &data_var,
                 sub,
                 &half_compiled,
                 is_simple_binding
@@ -443,7 +458,7 @@ impl DynamicBindString {
         }
         // Key "" is the value initialization of the variable in `data_var`
         compiled_bindings.insert(String::new(), finish_sectioned_line(
-            data_var,
+            &data_var,
             "",
             &half_compiled,
             is_simple_binding
@@ -631,7 +646,7 @@ mod tests {
             "Display this string"
         "#}.trim_end().to_string();
         let dynamic_string = DynamicBindString::try_from(test_string).unwrap();
-        let compiled_js = dynamic_string.compile("slf.element.innerHTML").unwrap();
+        let compiled_js = dynamic_string.compile(SetData::Variable("slf.element.innerHTML".to_string())).unwrap();
         let expected = HashMap::from([
             ("".to_string(), "slf.element.innerHTML = \"Display this string\";".to_string())
         ]);
@@ -643,7 +658,7 @@ mod tests {
             $<count
         "#}.trim_end().to_string();
         let dynamic_string = DynamicBindString::try_from(test_string).unwrap();
-        let compiled_js = dynamic_string.compile("slf.element.innerHTML").unwrap();
+        let compiled_js = dynamic_string.compile(SetData::Variable("slf.element.innerHTML".to_string())).unwrap();
         let expected = HashMap::from([
             ("".to_string(), "slf.element.innerHTML = State.snapshot(slf.states.count);".to_string()),
             ("count".to_string(), "slf.element.innerHTML = count;".to_string())
@@ -656,7 +671,7 @@ mod tests {
             return "Display this string";
         "#}.trim_end().to_string();
         let dynamic_string = DynamicBindString::try_from(test_string).unwrap();
-        let compiled_js = dynamic_string.compile("slf.element.innerHTML").unwrap();
+        let compiled_js = dynamic_string.compile(SetData::Variable("slf.element.innerHTML".to_string())).unwrap();
         let expected = HashMap::from([
             ("".to_string(), indoc::indoc! {r#"
                 slf.element.innerHTML = (() => {
@@ -672,7 +687,7 @@ mod tests {
             return $<count;
         "#}.trim_end().to_string();
         let dynamic_string = DynamicBindString::try_from(test_string).unwrap();
-        let compiled_js = dynamic_string.compile("slf.element.innerHTML").unwrap();
+        let compiled_js = dynamic_string.compile(SetData::Variable("slf.element.innerHTML".to_string())).unwrap();
         let expected = HashMap::from([
             ("".to_string(), indoc::indoc! {r#"
                 slf.element.innerHTML = (() => {
@@ -693,7 +708,7 @@ mod tests {
             $<count * $<mult
         "#}.trim_end().to_string();
         let dynamic_string = DynamicBindString::try_from(test_string).unwrap();
-        let compiled_js = dynamic_string.compile("slf.element.innerHTML").unwrap();
+        let compiled_js = dynamic_string.compile(SetData::Variable("slf.element.innerHTML".to_string())).unwrap();
         let expected = HashMap::from([
             ("".to_string(), "slf.element.innerHTML = State.snapshot(slf.states.count) * State.snapshot(slf.states.mult);".to_string()),
             ("count".to_string(), "slf.element.innerHTML = count * State.snapshot(slf.states.mult);".to_string()),

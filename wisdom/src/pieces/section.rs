@@ -1,21 +1,22 @@
 use serde::Deserialize;
-use std::collections::HashMap;
 
 use crate::{*, pieces::*};
 
 #[derive(Debug, Deserialize)]
-pub struct Text {
+pub struct Section {
     id: String,
     #[serde(default)]
-    data: TextData,
+    data: SectionData,
     #[serde(default)]
     states: Vec<State>,
     #[serde(default)]
     events: Vec<Event>,
+    #[serde(default)]
+    pieces: Vec<Pieces>
 }
 
-impl Piece for Text {
-    type Data = TextData;
+impl Piece for Section {
+    type Data = SectionData;
 
     fn states(&self) -> &Vec<State> {
         &self.states
@@ -32,33 +33,34 @@ impl Piece for Text {
     fn piece_id(&self, escaped_dollar: bool) -> String {
         let id = &self.id;
         if escaped_dollar {
-            format!(r#"Text\\${id}"#)
+            format!(r#"Section\\${id}"#)
         } else {
-            format!("Text${id}")
+            format!("Section${id}")
         }
     }
 
     fn html_tag(&self) -> String {
-        "p".to_string()
+        "div".to_string()
+    }
+
+    fn js_load_children(&self) -> Option<(String, String)> {
+        let (htmls, load_fns): (Vec<_>, Vec<_>) = self.pieces.iter()
+            .map(|p| (p.html_skeleton(), format!("unloads.push({});", p.js_load_call())))
+            .unzip();
+
+        Some((htmls.join(""), load_fns.join("\n")))
+    }
+
+    fn children(&self) -> Option<&Vec<Pieces>> {
+        Some(&self.pieces)
     }
 }
 
 #[derive(Debug, Default, Deserialize)]
-pub struct TextData {
-    text: Option<DynamicBindString>,
-}
+pub struct SectionData {}
 
-impl PieceData for TextData {
+impl PieceData for SectionData {
     fn js_register(&self) -> Result<(String, String), GameReadError> {
-        let mut data_inits = Vec::new();
-        let mut bindings = HashMap::new();
-
-        if let Some(text) = &self.text {
-            compile_bindings(text, &mut data_inits, SetData::Variable("slf.element.innerHTML".to_string()), &mut bindings)?;
-        }
-
-        let data_subscriptions = register_subscriptions(bindings);
-
-        Ok((data_inits.join("\n"), data_subscriptions.join("\n\n")))
+        Ok(("".to_string(), "".to_string()))
     }
 }

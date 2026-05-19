@@ -17,10 +17,12 @@ TBD
 ## Things to improve
 
 * Improve `Piece` trait functions. There's a lot of overlap, maybe a derive macro?
-* Support CSS classes.
+* Support CSS classes and general styling.
 * Figure out what piece events would be used for, and implement it.
 * Add `vars`: Values that are helpers for the current piece but not accessible by children.
 * Add custom piece types with inputs (like custom components in React).
+* Protect states and vars with mutex locks
+* Return unload callbacks from the load functions so that event listeners and other things can be cleaned up.
 
 ### DSC-related stuff
 * Document the dynamic string context language.

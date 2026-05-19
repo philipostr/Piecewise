@@ -24,7 +24,7 @@ impl Game {
 
     fn js_load_children(&self) -> (String, String) {
         let (htmls, load_fns): (Vec<_>, Vec<_>) = self.pieces.iter()
-            .map(|p| (p.html_skeleton(), p.js_load_call()))
+            .map(|p| (p.html_skeleton(), format!("{};", p.js_load_call())))
             .unzip();
 
         (htmls.join(""), load_fns.join("\n"))
@@ -70,7 +70,7 @@ impl Game {
                 {children_load_calls}
             "#}.trim_end().to_string())
         };
-        let js_load_fn = indoc::formatdoc! {r##"
+        let mut js_load_fn = indoc::formatdoc! {r##"
             function load_Game() {{
                 let slf = {{
                     element: document.querySelector("#Game"),
@@ -90,6 +90,7 @@ impl Game {
 
 
         "##}.trim_end().to_string();
+        js_load_fn.push_str("\n\n");
         js_writer.write_all(js_load_fn.as_bytes())?;
 
         for piece in &self.pieces {

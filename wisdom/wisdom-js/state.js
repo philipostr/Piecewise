@@ -7,9 +7,14 @@ export function createInt(initialValue, data) {
     }
 
     var subscribe = (callback) => {
-        document.addEventListener(stateId, (e) => {
+        let f = (e) => {
             callback(e.detail.newValue);
-        });
+        };
+        document.addEventListener(stateId, f);
+
+        return () => {
+            document.removeEventListener(stateId, f);
+        };
     }
 
     var mutate = (mutation) => {
@@ -40,7 +45,7 @@ export function snapshot(state) {
 }
 
 export function subscribe(state, callback) {
-    state[1](callback);
+    return state[1](callback);
 }
 
 export function mutate(state, mutation) {

@@ -1,17 +1,59 @@
-pub mod button;
 use std::{collections::HashMap, io::Write};
+use indent::indent_by;
+use serde::Deserialize;
 
+pub mod button;
 pub use button::*;
 pub mod game;
 pub use game::*;
+pub mod section;
+pub use section::*;
 pub mod text;
-use indent::indent_by;
-use serde::Deserialize;
 pub use text::*;
 pub mod view;
 pub use view::*;
 
 use crate::*;
+
+/// Exists to allow collection pieces (e.g. `View`) to hold all types of pieces
+/// polymorphically, without using trait objects. This is important because trait objects
+/// are very difficult to deserialize.
+#[derive(Debug, Deserialize)]
+enum Pieces {
+    Button(Button),
+    Section(Section),
+    Text(Text),
+    View(View),
+}
+
+impl Pieces {
+    pub fn html_skeleton(&self) -> String {
+        match self {
+            Pieces::Button(button) => button.html_skeleton(),
+            Pieces::Section(section) => section.html_skeleton(),
+            Pieces::Text(text) => text.html_skeleton(),
+            Pieces::View(view) => view.html_skeleton(),
+        }
+    }
+
+    pub fn js_load_fn(&self, writer: &mut std::io::BufWriter<std::fs::File>) -> Result<(), GameBuildError> {
+        match self {
+            Pieces::Button(button) => button.js_load_fn(writer),
+            Pieces::Section(section) => section.js_load_fn(writer),
+            Pieces::Text(text) => text.js_load_fn(writer),
+            Pieces::View(view) => view.js_load_fn(writer),
+        }
+    }
+
+    pub fn js_load_call(&self) -> String {
+        match self {
+            Pieces::Button(button) => button.js_load_call(),
+            Pieces::Section(section) => section.js_load_call(),
+            Pieces::Text(text) => text.js_load_call(),
+            Pieces::View(view) => view.js_load_call(),
+        }
+    }
+}
 
 pub trait PieceData {
     fn js_register(&self) -> Result<(String, String), GameReadError>;
@@ -42,6 +84,10 @@ trait Piece {
         None
     }
 
+    fn extra_slf_props(&self) -> Option<String> {
+        None
+    }
+
     fn js_load_fn(&self, writer: &mut std::io::BufWriter<std::fs::File>) -> Result<(), GameBuildError> {
         let (mut data_inits, mut data_subscriptions) = self.data().js_register()?;
         data_inits = indent_by(4, data_inits);
@@ -49,6 +95,11 @@ trait Piece {
 
         let piece_id = self.piece_id(false);
         let escaped_piece_id = self.piece_id(true);
+        let extra_props = if let Some(props) = self.extra_slf_props() {
+            indent_by(8, props)
+        } else {
+            String::new()
+        };
         let register_states = indent_by(4, self.states().iter()
             .map(|s: &State| s.js_register())
             .collect::<Vec<_>>()
@@ -69,13 +120,17 @@ trait Piece {
                 "".to_string()
             }
         };
-        let js_load_fn = indoc::formatdoc! {r##"
+        let mut js_load_fn = indoc::formatdoc! {r##"
             function load_{piece_id}(parent) {{
                 let slf = {{
                     element: document.querySelector("#{escaped_piece_id}"),
                     states: Object.create(parent.states),
                     events: Object.create(parent.events),
+
+                    // Extra properties
+                    {extra_props}
                 }};
+                let unloads = [];
 
                 // States
                 {register_states}
@@ -83,16 +138,24 @@ trait Piece {
                 // Events
                 {register_events}
 
-                // State subscriptions
-                {data_subscriptions}
-
                 // Data initializations
                 {data_inits}
 
+                // State subscriptions
+                {data_subscriptions}
+
                 // Children
                 {load_children}
+
+                return () => {{
+                    unloads.forEach((unload) => {{
+                        console.log(unload);
+                        unload();
+                    }});
+                }};
             }}
         "##}.trim_end().to_string();
+        js_load_fn.push_str("\n\n");
         writer.write_all(js_load_fn.as_bytes())?;
 
         if let Some(children) = self.children() {
@@ -105,50 +168,14 @@ trait Piece {
     }
 
     fn js_load_call(&self) -> String {
-        format!("load_{}(slf);", self.piece_id(false))
-    }
-}
-
-/// Exists to allow collection pieces (e.g. `View`) to hold all types of pieces
-/// polymorphically, without using trait objects. This is important because trait objects
-/// are very difficult to deserialize.
-#[derive(Debug, Deserialize)]
-enum Pieces {
-    Button(Button),
-    Text(Text),
-    View(View),
-}
-
-impl Pieces {
-    pub fn html_skeleton(&self) -> String {
-        match self {
-            Pieces::Button(button) => button.html_skeleton(),
-            Pieces::Text(text) => text.html_skeleton(),
-            Pieces::View(view) => view.html_skeleton(),
-        }
-    }
-
-    pub fn js_load_fn(&self, writer: &mut std::io::BufWriter<std::fs::File>) -> Result<(), GameBuildError> {
-        match self {
-            Pieces::Button(button) => button.js_load_fn(writer),
-            Pieces::Text(text) => text.js_load_fn(writer),
-            Pieces::View(view) => view.js_load_fn(writer),
-        }
-    }
-
-    pub fn js_load_call(&self) -> String {
-        match self {
-            Pieces::Button(button) => button.js_load_call(),
-            Pieces::Text(text) => text.js_load_call(),
-            Pieces::View(view) => view.js_load_call(),
-        }
+        format!("load_{}(slf)", self.piece_id(false))
     }
 }
 
 fn compile_bindings(
     data: &DynamicBindString, 
     result: &mut Vec<String>, 
-    data_var: &str, 
+    data_var: SetData, 
     bindings: &mut HashMap<String, Vec<String>>
 ) -> Result<(), GameReadError> {
     let mut binds = data.compile(data_var)?;
@@ -170,9 +197,9 @@ fn register_subscriptions(bindings: HashMap<String, Vec<String>>) -> Vec<String>
     for (sub, callbacks) in bindings {
         let callbacks = indent_by(4, callbacks.join("\n\n"));
         data_subscriptions.push(indoc::formatdoc! {r#"
-            State.subscribe(slf.states.{sub}, ({sub}) => {{
+            unloads.push(State.subscribe(slf.states.{sub}, ({sub}) => {{
                 {callbacks}
-            }});
+            }}));
         "#}.trim_end().to_string());
     }
 

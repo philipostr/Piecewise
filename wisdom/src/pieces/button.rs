@@ -6,6 +6,7 @@ use crate::{*, pieces::*};
 #[derive(Debug, Deserialize)]
 pub struct Button {
     id: String,
+    #[serde(default)]
     data: ButtonData,
     #[serde(default)]
     states: Vec<State>,
@@ -42,7 +43,7 @@ impl Piece for Button {
     }
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Default, Deserialize)]
 pub struct ButtonData {
     text: Option<DynamicBindString>,
     onclick: Option<DynamicCallbackString>,
@@ -54,7 +55,7 @@ impl PieceData for ButtonData {
         let mut bindings = HashMap::new();
 
         if let Some(text) = &self.text {
-            compile_bindings(text, &mut data_inits, "slf.element.innerHTML", &mut bindings)?;
+            compile_bindings(text, &mut data_inits, SetData::Variable("slf.element.innerHTML".to_string()), &mut bindings)?;
         }
 
         if let Some(onclick) = &self.onclick {
