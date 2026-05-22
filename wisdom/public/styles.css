@@ -1,0 +1,8 @@
+._p_Generator {
+    display: contents;
+}
+
+._p_Layout {
+    display: flex;
+    width: 100%;
+}

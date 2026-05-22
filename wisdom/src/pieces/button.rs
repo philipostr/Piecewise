@@ -38,6 +38,10 @@ impl Piece for Button {
         }
     }
 
+    fn piece_name(&self) -> String {
+        "Button".to_string()
+    }
+
     fn html_tag(&self) -> String {
         "button".to_string()
     }

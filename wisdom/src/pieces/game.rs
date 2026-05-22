@@ -27,7 +27,7 @@ impl Game {
             .map(|p| (p.html_skeleton(), format!("{};", p.js_load_call())))
             .unzip();
 
-        (htmls.join(""), load_fns.join("\n"))
+        (htmls.join(" + "), load_fns.join("\n"))
     }
 
     pub fn build(&self, target_dirpath: &str) -> Result<(), GameBuildError> {
@@ -37,6 +37,7 @@ impl Game {
             <head>
                 <meta charset="UTF-8">
                 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                <link rel="stylesheet" href="styles.css">
                 <title>{}</title>
             </head>
             <body>
@@ -66,12 +67,13 @@ impl Game {
         let load_children = {
             let (children_htmls, children_load_calls) = self.js_load_children();
             indent_by(4, indoc::formatdoc! {r#"
-                slf.element.innerHTML = "{children_htmls}";
+                slf.element.innerHTML = {children_htmls};
                 {children_load_calls}
             "#}.trim_end().to_string())
         };
         let mut js_load_fn = indoc::formatdoc! {r##"
             function load_Game() {{
+                let inputs = Object.create(null);
                 let slf = {{
                     element: document.querySelector("#Game"),
                     states: Object.create(null),
@@ -85,6 +87,7 @@ impl Game {
                 {register_events}
 
                 // Children
+                let sub_id = "top";
                 {load_children}
             }}
 

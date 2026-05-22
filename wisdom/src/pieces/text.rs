@@ -38,6 +38,10 @@ impl Piece for Text {
         }
     }
 
+    fn piece_name(&self) -> String {
+        "Text".to_string()
+    }
+
     fn html_tag(&self) -> String {
         "p".to_string()
     }

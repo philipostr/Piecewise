@@ -3,10 +3,10 @@ use serde::Deserialize;
 use crate::{*, pieces::*};
 
 #[derive(Debug, Deserialize)]
-pub struct Section {
+pub struct Layout {
     id: String,
     #[serde(default)]
-    data: SectionData,
+    data: LayoutData,
     #[serde(default)]
     states: Vec<State>,
     #[serde(default)]
@@ -15,8 +15,8 @@ pub struct Section {
     pieces: Vec<Pieces>
 }
 
-impl Piece for Section {
-    type Data = SectionData;
+impl Piece for Layout {
+    type Data = LayoutData;
 
     fn states(&self) -> &Vec<State> {
         &self.states
@@ -33,14 +33,14 @@ impl Piece for Section {
     fn piece_id(&self, escaped_dollar: bool) -> String {
         let id = &self.id;
         if escaped_dollar {
-            format!(r#"Section\\${id}"#)
+            format!(r#"Layout\\${id}"#)
         } else {
-            format!("Section${id}")
+            format!("Layout${id}")
         }
     }
 
     fn piece_name(&self) -> String {
-        "Section".to_string()
+        "Layout".to_string()
     }
 
     fn html_tag(&self) -> String {
@@ -60,11 +60,33 @@ impl Piece for Section {
     }
 }
 
-#[derive(Debug, Default, Deserialize)]
-pub struct SectionData {}
+#[derive(Clone, Copy, Debug, Default, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+enum PlaceX {
+    #[default]
+    SpaceEvenly,
+}
 
-impl PieceData for SectionData {
+impl From<PlaceX> for String {
+    fn from(value: PlaceX) -> Self {
+        match value {
+            PlaceX::SpaceEvenly => "space-evenly".to_string(),
+        }
+    }
+}
+
+#[derive(Debug, Default, Deserialize)]
+pub struct LayoutData {
+    #[serde(rename = "place-x")]
+    place_x: PlaceX,
+}
+
+impl PieceData for LayoutData {
     fn js_register(&self) -> Result<(String, String), GameReadError> {
-        Ok(("".to_string(), "".to_string()))
+        let mut data_inits = Vec::new();
+
+        data_inits.push(format!("slf.element.style.justifyContent = \"{}\";", String::from(self.place_x)));
+
+        Ok((data_inits.join("\n"), "".to_string()))
     }
 }

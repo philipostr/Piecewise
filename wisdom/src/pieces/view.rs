@@ -38,6 +38,10 @@ impl Piece for View {
         }
     }
 
+    fn piece_name(&self) -> String {
+        "View".to_string()
+    }
+
     fn html_tag(&self) -> String {
         "div".to_string()
     }
@@ -78,7 +82,7 @@ impl Piece for View {
         "#}.trim_end().to_string())
     }
 
-    fn children(&self) -> Option<&Vec<Pieces>> {
+    fn children(&self) -> Option<&[Pieces]> {
         Some(&self.pieces)
     }
 }

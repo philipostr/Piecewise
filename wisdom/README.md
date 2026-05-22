@@ -22,7 +22,7 @@ TBD
 * Add `vars`: Values that are helpers for the current piece but not accessible by children.
 * Add custom piece types with inputs (like custom components in React).
 * Protect states and vars with mutex locks
-* Return unload callbacks from the load functions so that event listeners and other things can be cleaned up.
+* Improve the efficiency of `Generator` updating (currently just reloads everything always)
 
 ### DSC-related stuff
 * Document the dynamic string context language.
