@@ -18,11 +18,11 @@ pub struct Section {
 impl Piece for Section {
     type Data = SectionData;
 
-    fn states(&self) -> &Vec<State> {
+    fn states(&self) -> &[State] {
         &self.states
     }
 
-    fn events(&self) -> &Vec<Event> {
+    fn events(&self) -> &[Event] {
         &self.events
     }
 
@@ -30,13 +30,9 @@ impl Piece for Section {
         &self.data
     }
 
-    fn piece_id(&self, escaped_dollar: bool) -> String {
+    fn piece_id(&self) -> String {
         let id = &self.id;
-        if escaped_dollar {
-            format!(r#"Section\\${id}"#)
-        } else {
-            format!("Section${id}")
-        }
+        format!("Section${id}")
     }
 
     fn piece_name(&self) -> String {
@@ -47,12 +43,12 @@ impl Piece for Section {
         "div".to_string()
     }
 
-    fn js_load_children(&self) -> Option<(String, String)> {
-        let (htmls, load_fns): (Vec<_>, Vec<_>) = self.pieces.iter()
-            .map(|p| (p.html_skeleton(), format!("unloads.push({});", p.js_load_call())))
-            .unzip();
+    fn js_load_children(&self) -> Option<String> {
+        let load_fns = self.pieces.iter()
+            .map(|p| format!("unloads.push({});", p.js_load_call()))
+            .collect::<Vec<_>>();
 
-        Some((htmls.join(" + "), load_fns.join("\n")))
+        Some(load_fns.join("\n"))
     }
 
     fn children(&self) -> Option<&[Pieces]> {

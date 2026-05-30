@@ -17,11 +17,11 @@ pub struct Text {
 impl Piece for Text {
     type Data = TextData;
 
-    fn states(&self) -> &Vec<State> {
+    fn states(&self) -> &[State] {
         &self.states
     }
 
-    fn events(&self) -> &Vec<Event> {
+    fn events(&self) -> &[Event] {
         &self.events
     }
 
@@ -29,13 +29,9 @@ impl Piece for Text {
         &self.data
     }
 
-    fn piece_id(&self, escaped_dollar: bool) -> String {
+    fn piece_id(&self) -> String {
         let id = &self.id;
-        if escaped_dollar {
-            format!(r#"Text\\${id}"#)
-        } else {
-            format!("Text${id}")
-        }
+        format!("Text${id}")
     }
 
     fn piece_name(&self) -> String {

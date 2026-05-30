@@ -1,4 +1,4 @@
-export function createInt(initialValue, data) {
+export function create(initialValue, data) {
     var state = initialValue;
     var stateId = crypto.randomUUID();
 
@@ -19,13 +19,10 @@ export function createInt(initialValue, data) {
 
     var mutate = (mutation) => {
         let newState = mutation(state);
-        if (Object.hasOwn(data, "minimum") && newState < data.minimum) {
+        if (Object.hasOwn(data, "validate") && !data.validate(newState)) {
             return;
         }
-        if (Object.hasOwn(data, "maximum") && newState > data.maximum) {
-            return;
-        }
-        
+
         let oldState = state;
         state = newState;
         

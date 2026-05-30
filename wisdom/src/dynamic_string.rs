@@ -1,10 +1,16 @@
-use std::{collections::{HashMap, HashSet}, sync::LazyLock};
+use std::{collections::{HashMap, HashSet}, fmt::Display, sync::LazyLock};
 
 use indent::indent_by;
 use regex_lite::Regex;
 use serde::{Deserialize, Serialize};
 
 use crate::GameReadError;
+
+#[derive(Debug)]
+pub enum DynamicString {
+    Callback(DynamicCallbackString),
+    Bind(DynamicBindString),
+}
 
 #[derive(Clone)]
 struct SectionedStrings {
@@ -198,14 +204,11 @@ impl HalfCompiledDynamicString {
         );
 
         let mut line_sections = Vec::new();
-        let mut lines: std::str::Lines<'_> = src.lines();
-        // Skip the first line (only contains 'callback/bind')
-        lines.next();
         // Only actually used if `is_bind_string` is true
         let mut referenced_subs = HashSet::new();
 
         // Compile line-by-line, to join together afterwards
-        for mut line in lines {
+        for mut line in src.lines() {
             let mut compiled_dscs = Vec::new();
             let mut mutated_state = None;
             let mut has_comment = false;
@@ -264,26 +267,26 @@ impl HalfCompiledDynamicString {
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
-#[serde(try_from = "String", into = "String")]
+#[serde(from = "String", into = "String")]
 pub struct DynamicCallbackString {
     source: String,
+    #[serde(skip)]
+    params: Vec<String>,
 }
 
 // For deserialization from String to work
-impl TryFrom<String> for DynamicCallbackString {
-    /// Used to signal to serde that this is not the correct variant of `DynamicString`.
-    /// The boolean value itself does not matter.
-    type Error = bool;
-
-    fn try_from(value: String) -> Result<Self, Self::Error> {
-        if value.lines().next() != Some("callback") {
-            // This is not a callback
-            return Err(true);
+impl From<String> for DynamicCallbackString {
+    fn from(value: String) -> Self {
+        Self {
+            source: value,
+            params: Vec::new(),
         }
+    }
+}
 
-        Ok(Self {
-            source: value
-        })
+impl From<&str> for DynamicCallbackString {
+    fn from(value: &str) -> Self {
+        Self::from(value.to_string())
     }
 }
 
@@ -294,7 +297,18 @@ impl From<DynamicCallbackString> for String {
     }
 }
 
+impl Display for DynamicCallbackString {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.source.fmt(f)
+    }
+}
+
 impl DynamicCallbackString {
+    pub fn with_params(mut self, params: Vec<String>) -> Self {
+        self.params = params;
+        self
+    }
+
     pub fn source(&self) -> &str {
         &self.source
     }
@@ -322,12 +336,22 @@ impl DynamicCallbackString {
         }
 
         let compiled_result = indent_by(4, compiled_lines.join("\n"));
+        let params = self.params.join(", ");
 
-        Ok(indoc::formatdoc! {r#"
-                {data_var} = () => {{
-                    {compiled_result}
-                }}
-            "#}.trim_end().to_string()
+        Ok(
+            if data_var.is_empty() {
+                indoc::formatdoc! {r#"
+                    ({params}) => {{
+                        {compiled_result}
+                    }}
+                "#}.trim_end().to_string()
+            } else {
+                indoc::formatdoc! {r#"
+                    {data_var} = ({params}) => {{
+                        {compiled_result}
+                    }}
+                "#}.trim_end().to_string()
+            }
         )
     }
 }
@@ -335,29 +359,27 @@ impl DynamicCallbackString {
 pub enum SetData {
     Variable(String),
     Function(String),
+    None,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
-#[serde(try_from = "String", into = "String")]
+#[serde(from = "String", into = "String")]
 pub struct DynamicBindString {
     source: String,
 }
 
 // For deserialization from String to work
-impl TryFrom<String> for DynamicBindString {
-    /// Used to signal to serde that this is not the correct variant of `DynamicString`.
-    /// The boolean value itself does not matter.
-    type Error = bool;
-
-    fn try_from(value: String) -> Result<Self, Self::Error> {
-        if value.lines().next() != Some("bind") {
-            // This is not a binding
-            return Err(true);
-        }
-
-        Ok(Self {
+impl From<String> for DynamicBindString {
+    fn from(value: String) -> Self {
+        Self {
             source: value
-        })
+        }
+    }
+}
+
+impl From<&str> for DynamicBindString {
+    fn from(value: &str) -> Self {
+        Self::from(value.to_string())
     }
 }
 
@@ -365,6 +387,12 @@ impl TryFrom<String> for DynamicBindString {
 impl From<DynamicBindString> for String {
     fn from(value: DynamicBindString) -> Self {
         value.source
+    }
+}
+
+impl Display for DynamicBindString {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.source.fmt(f)
     }
 }
 
@@ -419,6 +447,7 @@ impl DynamicBindString {
                 match data_var {
                     SetData::Variable(v) => format!("{v} = {compiled_result};"),
                     SetData::Function(f) => format!("{f}({compiled_result});"),
+                    SetData::None => compiled_result,
                 }
             } else {
                 match data_var {
@@ -432,6 +461,11 @@ impl DynamicBindString {
                             {compiled_result}
                         }})());
                     "#}.trim_end().to_string(),
+                    SetData::None => indoc::formatdoc! {r#"
+                        (() => {{
+                            {compiled_result}
+                        }})()
+                    "#}.trim_end().to_string(),
                 }
             }
         }
@@ -439,9 +473,8 @@ impl DynamicBindString {
         let mut compiled_bindings = HashMap::new();
         let is_simple_binding = {
             let mut lines = self.source.lines();
-            lines.next();
-            if let Some(second_line) = lines.next() && lines.next().is_none() {
-                !second_line.starts_with("return")
+            if let Some(first_line) = lines.next() && lines.next().is_none() {
+                !first_line.starts_with("return") && !first_line.trim_end().ends_with(';')
             } else {
                 false
             }

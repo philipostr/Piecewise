@@ -4,6 +4,8 @@ use serde::Deserialize;
 
 pub mod button;
 pub use button::*;
+pub mod custom_piece;
+pub use custom_piece::*;
 pub mod game;
 pub use game::*;
 pub mod generator;
@@ -25,6 +27,7 @@ use crate::*;
 #[derive(Debug, Deserialize)]
 enum Pieces {
     Button(Button),
+    Custom(CustomPiece),
     Generator(Generator),
     Layout(Layout),
     Section(Section),
@@ -36,6 +39,7 @@ impl Pieces {
     pub fn html_skeleton(&self) -> String {
         match self {
             Pieces::Button(button) => button.html_skeleton(),
+            Pieces::Custom(custom_piece) => custom_piece.html_skeleton(),
             Pieces::Generator(generator) => generator.html_skeleton(),
             Pieces::Layout(layout) => layout.html_skeleton(),
             Pieces::Section(section) => section.html_skeleton(),
@@ -47,6 +51,7 @@ impl Pieces {
     pub fn js_load_fn(&self, writer: &mut std::io::BufWriter<std::fs::File>) -> Result<(), GameBuildError> {
         match self {
             Pieces::Button(button) => button.js_load_fn(writer),
+            Pieces::Custom(custom_piece) => custom_piece.js_load_fn(writer),
             Pieces::Generator(generator) => generator.js_load_fn(writer),
             Pieces::Layout(layout) => layout.js_load_fn(writer),
             Pieces::Section(section) => section.js_load_fn(writer),
@@ -58,6 +63,7 @@ impl Pieces {
     pub fn js_load_call(&self) -> String {
         match self {
             Pieces::Button(button) => button.js_load_call(),
+            Pieces::Custom(custom_piece) => custom_piece.js_load_call(),
             Pieces::Generator(generator) => generator.js_load_call(),
             Pieces::Layout(layout) => layout.js_load_call(),
             Pieces::Section(section) => section.js_load_call(),
@@ -74,15 +80,15 @@ pub trait PieceData {
 trait Piece {
     type Data: PieceData;
 
-    fn states(&self) -> &Vec<State>;
-    fn events(&self) -> &Vec<Event>;
+    fn states(&self) -> &[State];
+    fn events(&self) -> &[Event];
     fn data(&self) -> &Self::Data;
-    fn piece_id(&self, escaped_dollar: bool) -> String;
+    fn piece_id(&self) -> String;
     fn piece_name(&self) -> String;
     fn html_tag(&self) -> String;
 
     fn html_skeleton(&self) -> String {
-        format!(r#""<{tag} id=\"{id}$" + sub_id + "\" class=\"_p_{class}\"></{tag}>""#, tag = self.html_tag(), id = self.piece_id(false), class = self.piece_name())
+        format!(r#""<{tag} id=\"{id}$" + sub_id + "\" class=\"_p_{class}\"></{tag}>""#, tag = self.html_tag(), id = self.piece_id(), class = self.piece_name())
     }
 
     /// Most pieces are terminal, meaning they don't have children. Override
@@ -93,7 +99,7 @@ trait Piece {
 
     /// Most pieces are terminal, meaning they don't have children. Override
     /// the default implementation for collection pieces.
-    fn js_load_children(&self) -> Option<(String, String)> {
+    fn js_load_children(&self) -> Option<String> {
         None
     }
 
@@ -106,8 +112,9 @@ trait Piece {
         data_inits = indent_by(4, data_inits);
         data_subscriptions = indent_by(4, data_subscriptions);
 
-        let piece_id = self.piece_id(false);
-        let escaped_piece_id = self.piece_id(true);
+        let piece_id = self.piece_id();
+        let html_tag = self.html_tag();
+        let piece_name = self.piece_name();
         let extra_props = if let Some(props) = self.extra_slf_props() {
             indent_by(8, props)
         } else {
@@ -115,7 +122,7 @@ trait Piece {
         };
         let register_states = indent_by(4, self.states().iter()
             .map(|s: &State| s.js_register())
-            .collect::<Vec<_>>()
+            .collect::<Result<Vec<_>, _>>()?
             .join("\n")
         );
         let register_events = indent_by(4, self.events().iter()
@@ -124,25 +131,29 @@ trait Piece {
             .join("\n")
         );
         let load_children = {
-            if let Some((children_htmls, children_load_calls)) = self.js_load_children() {
-                indent_by(4, indoc::formatdoc! {r#"
-                    slf.element.innerHTML = {children_htmls};
-                    {children_load_calls}
-                "#}.trim_end().to_string())
+            if let Some(children_load_calls) = self.js_load_children() {
+                indent_by(4, children_load_calls)
             } else {
                 "".to_string()
             }
         };
         let mut js_load_fn = indoc::formatdoc! {r##"
-            function load_{piece_id}(parent, sub_id, inputs) {{
+            function load_{piece_id}(parent, inputs) {{
                 let slf = {{
-                    element: document.querySelector("#{escaped_piece_id}\\$" + sub_id),
+                    element: document.createElement("{html_tag}"),
                     states: Object.create(parent.states),
                     events: Object.create(parent.events),
 
                     // Extra properties
                     {extra_props}
                 }};
+                {{
+                    let sub_id = gen_sub_id();
+                    slf.element.id = "{piece_id}$" + sub_id;
+                    slf.element.className = "_p_{piece_name}";
+                    parent.element.appendChild(slf.element);
+                }}
+
                 let unloads = [];
 
                 // States
@@ -185,14 +196,14 @@ trait Piece {
     }
 
     fn js_load_call(&self) -> String {
-        format!("load_{}(slf, sub_id, inputs)", self.piece_id(false))
+        format!("load_{}(slf, inputs)", self.piece_id())
     }
 }
 
 fn compile_bindings(
-    data: &DynamicBindString, 
-    result: &mut Vec<String>, 
-    data_var: SetData, 
+    data: &DynamicBindString,
+    result: &mut Vec<String>,
+    data_var: SetData,
     bindings: &mut HashMap<String, Vec<String>>
 ) -> Result<(), GameReadError> {
     let mut binds = data.compile(data_var)?;

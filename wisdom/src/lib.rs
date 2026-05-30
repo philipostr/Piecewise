@@ -16,6 +16,8 @@ pub enum GameReadError {
     Io(std::io::Error),
     SerdeSaphyr(serde_saphyr::Error),
     DynamicString(String),
+    CustomPiece(String),
+    State(String),
 }
 
 impl From<std::io::Error> for GameReadError {
@@ -36,6 +38,8 @@ impl Display for GameReadError {
             Self::Io(e) => e.fmt(f),
             Self::SerdeSaphyr(e) => e.fmt(f),
             Self::DynamicString(e) => e.fmt(f),
+            Self::CustomPiece(e) => e.fmt(f),
+            Self::State(e) => e.fmt(f),
         }
     }
 }
@@ -48,6 +52,8 @@ impl GameReadError {
             GameReadError::Io(error) => error.to_string(),
             GameReadError::SerdeSaphyr(error) => error.to_string(),
             GameReadError::DynamicString(error) => error.clone(),
+            GameReadError::CustomPiece(error) => error.clone(),
+            GameReadError::State(error) => error.clone(),
         }
     }
 }
@@ -87,13 +93,14 @@ impl std::error::Error for GameBuildError {}
 
 /* End of GameBuildError */
 
-pub fn build(yaml_path: &str) -> Result<(), GameBuildError> {
-    let game = Game::from_path(yaml_path)?;
+pub fn build(project_path: &str) -> Result<(), GameBuildError> {
+    init_custom_piece_types(&format!("{project_path}{}custom_piece_types", std::path::MAIN_SEPARATOR))?;
+    let game = Game::from_path(&format!("{project_path}{}wisdom.yaml", std::path::MAIN_SEPARATOR))?;
 
     let target_dirpath = "dist";
     clean_targetdir(target_dirpath)?;
     std::fs::create_dir_all(target_dirpath)?;
-    dircpy::copy_dir("wisdom-js", &format!("{target_dirpath}/wisdom-js"))?;
+    dircpy::copy_dir("wisdom-js", &format!("{target_dirpath}{}wisdom-js", std::path::MAIN_SEPARATOR))?;
     dircpy::copy_dir("public", target_dirpath)?;
     game.build(target_dirpath)?;
 

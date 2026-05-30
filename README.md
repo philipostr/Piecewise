@@ -23,6 +23,7 @@ Game engine with board game virtualization in mind!
 `cd piecewise/src-tauri; cargo tauri dev`
 
 ### Compile `wisdom` YAML for dev testing (VSCode)
-1. Create a game config in `wisdom/test.yaml`
+1. Create a game config in `wisdom/testing/wisdom.yaml`
+1. Create folder `wisdom/testing/custom_piece_types`, and optionally define custom piece types there
 1. Run `wisdom/src/main.rs`
 1. Right click `wisdom/dist/index.html` and select `Open with Live Server`

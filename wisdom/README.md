@@ -20,13 +20,14 @@ TBD
 * Support CSS classes and general styling.
 * Figure out what piece events would be used for, and implement it.
 * Add `vars`: Values that are helpers for the current piece but not accessible by children.
-* Add custom piece types with inputs (like custom components in React).
-* Protect states and vars with mutex locks
-* Improve the efficiency of `Generator` updating (currently just reloads everything always)
+* Protect states and vars with mutex locks.
+* Improve the efficiency of `Generator` updating (currently just reloads everything always).
+* Only do implicit `inputs` propagation for static subtrees, anything dynamically loaded (custom types) require explicit propagation through `inputs`.
+* Support default values for unprovided non-required inputs to custom piece types, otherwise `undefined`.
 
 ### DSC-related stuff
 * Document the dynamic string context language.
 * Deal with format strings somehow. Currently, any state references to be inline formatted will simply be ignored.
 * Maybe support multi-line mutation callbacks?
 * Just... ignore comments entirely. Less work to do, and it doesn't matter ultimately anwyay.
-* REMOVE THE MANDATORY `bind` AND `callback` HEADERS
+* Add `$?` to be able to see the most recent result of `validate()`.

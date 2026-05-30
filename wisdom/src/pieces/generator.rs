@@ -16,11 +16,11 @@ pub struct Generator {
 impl Piece for Generator {
     type Data = GeneratorData;
 
-    fn states(&self) -> &Vec<State> {
+    fn states(&self) -> &[State] {
         &self.states
     }
 
-    fn events(&self) -> &Vec<Event> {
+    fn events(&self) -> &[Event] {
         &self.events
     }
 
@@ -28,13 +28,9 @@ impl Piece for Generator {
         &self.data
     }
 
-    fn piece_id(&self, escaped_dollar: bool) -> String {
+    fn piece_id(&self) -> String {
         let id = &self.id;
-        if escaped_dollar {
-            format!(r#"Generator\\${id}"#)
-        } else {
-            format!("Generator${id}")
-        }
+        format!("Generator${id}")
     }
 
     fn piece_name(&self) -> String {
@@ -49,12 +45,7 @@ impl Piece for Generator {
         let idx = self.data.index.clone();
         let it = self.data.iterator.clone();
 
-        let load_child = indent_by(8, indoc::formatdoc! {r#"
-            let child = document.createElement(null);
-            slf.element.appendChild(child);
-            child.outerHTML = {};
-            {}
-        "#, self.base.html_skeleton(), format!("unloads.push({});", self.base.js_load_call())}.trim_end().to_string());
+        let load_child = indent_by(8, format!("unloads.push({});", self.base.js_load_call()));
 
         Some(indoc::formatdoc! {r#"
             unloads: () => {{}},
@@ -64,8 +55,7 @@ impl Piece for Generator {
                 let unloads = [];
 
                 list.forEach((it, idx) => {{
-                    let sub_id = crypto.randomUUID().split("-")[0];
-                    let inputs = Object.create(null);
+                    let inputs = Object.create(inputs);
                     if ("{it}" != "_") {{
                         inputs.{it} = it;
                     }}

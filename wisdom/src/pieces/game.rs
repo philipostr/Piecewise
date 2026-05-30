@@ -22,12 +22,12 @@ impl Game {
         )?)
     }
 
-    fn js_load_children(&self) -> (String, String) {
-        let (htmls, load_fns): (Vec<_>, Vec<_>) = self.pieces.iter()
-            .map(|p| (p.html_skeleton(), format!("{};", p.js_load_call())))
-            .unzip();
+    fn js_load_children(&self) -> String {
+        let load_fns = self.pieces.iter()
+            .map(|p| format!("{};", p.js_load_call()))
+            .collect::<Vec<_>>();
 
-        (htmls.join(" + "), load_fns.join("\n"))
+        load_fns.join("\n")
     }
 
     pub fn build(&self, target_dirpath: &str) -> Result<(), GameBuildError> {
@@ -56,7 +56,7 @@ impl Game {
 
         let register_states = indent_by(4, self.states.iter()
             .map(|s: &State| s.js_register())
-            .collect::<Vec<_>>()
+            .collect::<Result<Vec<_>, _>>()?
             .join("\n")
         );
         let register_events = indent_by(4, self.events.iter()
@@ -65,11 +65,8 @@ impl Game {
             .join("\n")
         );
         let load_children = {
-            let (children_htmls, children_load_calls) = self.js_load_children();
-            indent_by(4, indoc::formatdoc! {r#"
-                slf.element.innerHTML = {children_htmls};
-                {children_load_calls}
-            "#}.trim_end().to_string())
+            let children_load_calls = self.js_load_children();
+            indent_by(4, children_load_calls)
         };
         let mut js_load_fn = indoc::formatdoc! {r##"
             function load_Game() {{
@@ -79,6 +76,7 @@ impl Game {
                     states: Object.create(null),
                     events: Object.create(null),
                 }};
+                let unloads = []; // Never actually matters, but prevents errors
 
                 // States
                 {register_states}
@@ -87,7 +85,6 @@ impl Game {
                 {register_events}
 
                 // Children
-                let sub_id = "top";
                 {load_children}
             }}
 

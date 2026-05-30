@@ -18,11 +18,11 @@ pub struct Layout {
 impl Piece for Layout {
     type Data = LayoutData;
 
-    fn states(&self) -> &Vec<State> {
+    fn states(&self) -> &[State] {
         &self.states
     }
 
-    fn events(&self) -> &Vec<Event> {
+    fn events(&self) -> &[Event] {
         &self.events
     }
 
@@ -30,13 +30,9 @@ impl Piece for Layout {
         &self.data
     }
 
-    fn piece_id(&self, escaped_dollar: bool) -> String {
+    fn piece_id(&self) -> String {
         let id = &self.id;
-        if escaped_dollar {
-            format!(r#"Layout\\${id}"#)
-        } else {
-            format!("Layout${id}")
-        }
+        format!("Layout${id}")
     }
 
     fn piece_name(&self) -> String {
@@ -47,12 +43,12 @@ impl Piece for Layout {
         "div".to_string()
     }
 
-    fn js_load_children(&self) -> Option<(String, String)> {
-        let (htmls, load_fns): (Vec<_>, Vec<_>) = self.pieces.iter()
-            .map(|p| (p.html_skeleton(), format!("unloads.push({});", p.js_load_call())))
-            .unzip();
+    fn js_load_children(&self) -> Option<String> {
+        let load_fns = self.pieces.iter()
+            .map(|p| format!("unloads.push({});", p.js_load_call()))
+            .collect::<Vec<_>>();
 
-        Some((htmls.join(" + "), load_fns.join("\n")))
+        Some(load_fns.join("\n"))
     }
 
     fn children(&self) -> Option<&[Pieces]> {
@@ -76,8 +72,8 @@ impl From<PlaceX> for String {
 }
 
 #[derive(Debug, Default, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct LayoutData {
-    #[serde(rename = "place-x")]
     place_x: PlaceX,
 }
 
